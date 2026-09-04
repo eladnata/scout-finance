@@ -57,4 +57,44 @@ test.describe('layout system', () => {
     });
     expect(pads.feature).toBeGreaterThan(pads.normal);
   });
+
+  test('service cards are wide enough to hold their content', async ({ page }, testInfo) => {
+    await page.goto('/he/');
+    const width = await page.evaluate(() =>
+      document.querySelector('.service-entry').getBoundingClientRect().width
+    );
+    if (testInfo.project.name === 'desktop') {
+      expect(width).toBeGreaterThan(340);
+    }
+  });
+
+  test('the process rail shows ordinals in a narrow track', async ({ page }, testInfo) => {
+    await page.goto('/he/');
+    const item = await page.evaluate(() => {
+      const el = document.querySelector('.method-grid .rail-item');
+      if (!el) return null;
+      const marker = el.querySelector('.rail-marker');
+      return {
+        markerText: marker ? marker.textContent.trim() : null,
+        markerWidth: marker ? marker.getBoundingClientRect().width : null,
+        columns: getComputedStyle(el).gridTemplateColumns.split(' ').length
+      };
+    });
+    expect(item).not.toBeNull();
+    expect(item.markerText).toBe('01');
+    if (testInfo.project.name === 'desktop') {
+      expect(item.columns).toBe(2);
+    }
+  });
+
+  test('the hero resolves above the fold', async ({ page }, testInfo) => {
+    await page.goto('/he/');
+    const bottom = await page.evaluate(() =>
+      document.querySelector('.hero-assurance').getBoundingClientRect().bottom
+    );
+    const viewport = testInfo.project.use.viewport.height;
+    if (testInfo.project.name === 'desktop') {
+      expect(bottom).toBeLessThanOrEqual(viewport);
+    }
+  });
 });
