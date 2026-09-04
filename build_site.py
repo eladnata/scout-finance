@@ -12,6 +12,7 @@ ROOT = SOURCE_ROOT / 'dist'
 ASSETS = ROOT / 'assets'
 STATIC_ASSETS = SOURCE_ROOT / 'static' / 'assets'
 CONTEXT = os.environ.get('CONTEXT', '').strip().lower()
+PLACEHOLDER_MEDIA = os.environ.get('PLACEHOLDER_MEDIA', '').strip() == '1'
 SITE_IDENTITY = SiteIdentity.from_environment(os.environ)
 TURNSTILE_TEST_SITE_KEY = '1x00000000000000000000AA'
 TURNSTILE_SITE_KEY = os.environ.get('TURNSTILE_SITE_KEY', '').strip() or TURNSTILE_TEST_SITE_KEY
@@ -203,7 +204,8 @@ STYLE = (SOURCE_DIR / 'styles.css').read_text(encoding='utf-8')
 SCRIPT = (SOURCE_DIR / 'site.js').read_text(encoding='utf-8')
 
 if STATIC_ASSETS.exists():
-    shutil.copytree(STATIC_ASSETS, ASSETS, dirs_exist_ok=True)
+    ignore = None if PLACEHOLDER_MEDIA else shutil.ignore_patterns('images')
+    shutil.copytree(STATIC_ASSETS, ASSETS, dirs_exist_ok=True, ignore=ignore)
 (ASSETS/'styles.css').write_bytes(STYLE.encode('utf-8'))
 (ASSETS/'site.js').write_bytes(SCRIPT.encode('utf-8'))
 

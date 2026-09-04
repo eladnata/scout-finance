@@ -2,6 +2,8 @@
 
 No photographic asset may be published until its source, author, licence and approval fields are complete. Files should be supplied in their original resolution; production derivatives will be generated locally as AVIF, WebP and JPEG.
 
+**Generated placeholders.** `scripts/make-placeholder-media.py` writes on-brand generated compositions into `static/assets/images/` for layout review. They are not photography and carry no licence to clear, but they are also not approvable output. `build_site.py` includes them only when `PLACEHOLDER_MEDIA=1`; every default and production build renders the abstract fallback instead. Every row below stays `Approved: No` until real, rights-cleared photography replaces it.
+
 | Slot | Priority and requested image | Minimum / crop | Source URL | Author | Licence | Downloaded | Attribution | Approved |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `hero` | P0 — senior finance professionals reviewing control documents in a real, naturally lit working session; navy, steel and neutral tones; documentary, not posed. Avoid handshakes, visible client data, fake charts and exaggerated smiles. | 1600×2000, 4:5; faces and hands within central 60% | Not supplied | Not supplied | Not supplied | Not supplied | Not determined | No |
