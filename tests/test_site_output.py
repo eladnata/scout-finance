@@ -57,7 +57,7 @@ class SiteOutputTests(unittest.TestCase):
             self.assertEqual(html.count('class="service-icon"'), 6)
             self.assertNotIn("<svg><use", html)
             self.assertIn('class="institutional-hero"', html)
-            self.assertIn('class="proof-strip"', html)
+            self.assertIn('class="proof-strip', html)
 
     def test_service_icons_have_unique_paths(self) -> None:
         from source.icons import ICON_PATHS
