@@ -97,4 +97,37 @@ test.describe('layout system', () => {
       expect(bottom).toBeLessThanOrEqual(viewport);
     }
   });
+
+  test('mobile chrome is proportionate and reachable', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile', 'mobile only');
+    await page.goto('/he/');
+    const m = await page.evaluate(() => {
+      const w = (sel) => {
+        const el = document.querySelector(sel);
+        return el ? el.getBoundingClientRect().width : null;
+      };
+      const targets = [...document.querySelectorAll('a.btn, button')]
+        .filter((el) => el.offsetParent !== null)
+        .map((el) => el.getBoundingClientRect().height);
+      return {
+        viewport: window.innerWidth,
+        brand: w('.brand img'),
+        footerLogo: w('.site-footer .brand img'),
+        smallestTarget: Math.min(...targets)
+      };
+    });
+    expect(m.brand).toBeLessThanOrEqual(180);
+    expect(m.footerLogo).toBeLessThanOrEqual(m.viewport * 0.6);
+    expect(m.smallestTarget).toBeGreaterThanOrEqual(44);
+  });
+
+  test('hero actions stack on small screens', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile', 'mobile only');
+    await page.goto('/he/');
+    const tops = await page.evaluate(() =>
+      [...document.querySelectorAll('.institutional-hero .actions .btn')]
+        .map((el) => Math.round(el.getBoundingClientRect().top))
+    );
+    expect(new Set(tops).size).toBe(tops.length);
+  });
 });
