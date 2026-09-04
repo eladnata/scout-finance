@@ -1,6 +1,7 @@
 """Placeholder media is generated locally and never ships by default."""
 
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -50,6 +51,10 @@ class PlaceholderMedia(unittest.TestCase):
                 self.assertAlmostEqual(actual, expected, places=2, msg=slot)
 
     def test_default_build_still_renders_the_abstract_fallback(self) -> None:
+        images_dir = ROOT / "static" / "assets" / "images"
+        if images_dir.exists():
+            shutil.rmtree(images_dir)
+
         environment = dict(os.environ)
         environment.pop("PLACEHOLDER_MEDIA", None)
         subprocess.run(

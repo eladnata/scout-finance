@@ -6,11 +6,11 @@ playwright-report/
 .lighthouseci/
 .superpowers/
 
-# Generated placeholder media — never committed, never shipped
-static/assets/images/
-
 # scratch screenshots from design review
 *.png
 !static/assets/**
 !artifacts/**
+
+# Generated placeholder media — never committed, never shipped
+static/assets/images/**
 .playwright-mcp/
