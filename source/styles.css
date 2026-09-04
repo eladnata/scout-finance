@@ -280,6 +280,7 @@ body[dir=rtl] .institutional-hero h1{max-width:18ch;font-family:'IBM Plex Sans H
   .privacy-disclosure{grid-template-columns:1fr;gap:var(--sp-4);padding:var(--sp-4);inset-inline:var(--sp-3);bottom:var(--sp-3);width:auto}
   .privacy-disclosure p{font-size:var(--t-xs);line-height:1.55}
   .privacy-actions{justify-content:space-between;width:100%}
+  .legal-links button{min-height:44px}
   .footer-grid{grid-template-columns:1fr}.footer-grid>div:first-child{grid-column:auto}.site-footer{padding-top:46px}
 }
 
