@@ -1,0 +1,14 @@
+{
+  "name": "scout-finance-premium-site",
+  "private": true,
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:function": "node --test tests/contact-function.test.mjs",
+    "lighthouse": "lhci autorun"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
+    "@lhci/cli": "0.15.1",
+    "@playwright/test": "1.62.1"
+  }
+}
