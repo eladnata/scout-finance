@@ -62,8 +62,14 @@ class SiteOutputTests(unittest.TestCase):
     def test_service_icons_have_unique_paths(self) -> None:
         from source.icons import ICON_PATHS
 
-        self.assertEqual(len(ICON_PATHS), 8)
-        self.assertEqual(len(set(ICON_PATHS.values())), 8)
+        self.assertEqual(len(ICON_PATHS), 19)
+        self.assertEqual(len(set(ICON_PATHS.values())), 19)
+
+    def test_supporting_grids_carry_icons(self) -> None:
+        for lang in ("he", "en"):
+            html = (DIST / lang / "index.html").read_text(encoding="utf-8")
+            self.assertEqual(html.count('class="grid-icon"'), 8)
+            self.assertNotIn('class="grid-icon"', html.split('method-grid')[1].split('</section>')[0])
 
     def test_inner_pages_use_the_institutional_page_shell(self) -> None:
         for lang in ("he", "en"):

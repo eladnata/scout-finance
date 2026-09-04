@@ -290,11 +290,13 @@ def home_body(lang):
     proofs=''.join(f'<div class="proof-item"><span class="proof-number">{escape(a)}</span><div class="proof-label">{escape(b)}</div></div>' for a,b in h['proof'])
     icon_names={'audit':'audit','sox':'sox','risk-controls':'controls','financial-advisory':'advisory','investigative-audit':'investigative','technology-audit':'technology'}
     svc=''.join(f'<a class="service-entry" href="{url(lang,s)}">{icon(icon_names[s])}<span class="service-index">0{i}</span><div><h3>{escape(en if lang=="en" else he)}</h3><p>{escape(service_desc[lang][s])}</p><span class="service-action">{("Explore service" if lang=="en" else "לפרטי השירות")}</span></div></a>' for i,(s,en,he) in enumerate(services[:6],1))
-    chall=''.join(f'<article class="challenge"><h3>{escape(a)}</h3><p>{escape(b)}</p></article>' for a,b in h['challenges'])
+    challenge_icons=('control-drift','documentation','transparency','subsidiaries')
+    chall=''.join(f'<article class="challenge">{icon(challenge_icons[i],css_class="grid-icon")}<h3>{escape(a)}</h3><p>{escape(b)}</p></article>' for i,(a,b) in enumerate(h['challenges']))
     meth=''.join(f'<div class="rail-item"><span class="rail-marker" aria-hidden="true">{n}</span><div class="rail-body"><h3>{escape(t)}</h3><p>{escape(p)}</p></div></div>' for n,t,p in h['method'])
     countries=['Germany','Luxembourg','Canada','United States','China','Japan'] if lang=='en' else ['גרמניה','לוקסמבורג','קנדה','ארצות הברית','סין','יפן']
     countries_html=''.join(f'<div class="country"><strong>{x}</strong></div>' for x in countries)
-    industries=''.join(f'<article class="industry"><h3>{escape(a)}</h3><p>{escape(b)}</p></article>' for a,b in h['industries'])
+    industry_icons=('biotech','hitech','public-sector','complex-org')
+    industries=''.join(f'<article class="industry">{icon(industry_icons[i],css_class="grid-icon")}<h3>{escape(a)}</h3><p>{escape(b)}</p></article>' for i,(a,b) in enumerate(h['industries']))
     faqs=''.join(f'<div class="faq"><button type="button" aria-expanded="false" aria-controls="faq-{lang}-{i}"><span>{escape(q)}</span><span aria-hidden="true">+</span></button><div id="faq-{lang}-{i}" class="faq-answer" hidden>{escape(a)}</div></div>' for i,(q,a) in enumerate(h['faqs']))
     hero_media=media_panel('hero',lang,STATIC_ASSETS)
     method_media=media_panel('method',lang,STATIC_ASSETS)
