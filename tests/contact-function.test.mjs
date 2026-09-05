@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { handleContact, validateFields } from '../netlify/functions/contact.mts';
+import { handleContact, validateFields } from '../shared/contact-handler.mts';
 
 const origin = 'https://www.scout-finance.co.il';
 const validFields = {

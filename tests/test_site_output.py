@@ -1,6 +1,7 @@
 from html.parser import HTMLParser
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -274,6 +275,32 @@ class SiteOutputTests(unittest.TestCase):
         self.assertIn("Strict-Transport-Security", config)
         self.assertIn("https://challenges.cloudflare.com", config)
         self.assertNotIn("api.resend.com", config)
+
+    def test_cloudflare_pages_config_matches_netlify_security_headers(self) -> None:
+        headers = (DIST / "_headers").read_text(encoding="utf-8")
+        redirects = (DIST / "_redirects").read_text(encoding="utf-8")
+        netlify_config = (ROOT / "netlify.toml").read_text(encoding="utf-8")
+        self.assertIn("/he/", redirects)
+        self.assertIn("Content-Security-Policy", headers)
+        self.assertIn("https://challenges.cloudflare.com", headers)
+        self.assertIn("Strict-Transport-Security", headers)
+        self.assertIn("Cache-Control", headers)
+        self.assertNotIn("api.resend.com", headers)
+        # The two configs are hand-kept in sync; catch drift by comparing the
+        # actual CSP directive string, not just presence of the header name.
+        netlify_csp = re.search(r'Content-Security-Policy = "([^"]+)"', netlify_config)
+        headers_csp = re.search(r"Content-Security-Policy: (.+)", headers)
+        self.assertIsNotNone(netlify_csp)
+        self.assertIsNotNone(headers_csp)
+        self.assertEqual(netlify_csp.group(1), headers_csp.group(1).strip())
+
+    def test_cloudflare_pages_function_shares_the_netlify_contact_logic(self) -> None:
+        cloudflare_function = (ROOT / "functions" / "api" / "contact.ts").read_text(encoding="utf-8")
+        netlify_function = (ROOT / "netlify" / "functions" / "contact.mts").read_text(encoding="utf-8")
+        self.assertIn("shared/contact-handler", cloudflare_function)
+        self.assertIn("shared/contact-handler", netlify_function)
+        self.assertIn("handleContact", cloudflare_function)
+        self.assertIn("CF-Connecting-IP", cloudflare_function)
 
     def test_production_build_rejects_missing_legal_identity(self) -> None:
         env = {"CONTEXT": "production", "PATH": os.environ.get("PATH", "")}

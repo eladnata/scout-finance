@@ -449,6 +449,22 @@ for lang in ('en','he'):
 sitemap='''<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'''+''.join(f'<url><loc>{u}</loc></url>' for u in urls)+'</urlset>'
 (ROOT/'sitemap.xml').write_text(sitemap,encoding='utf-8')
 
+# Cloudflare Pages routing/header config (Netlify's equivalents live in
+# netlify.toml). Kept in sync by hand — same CSP, same cache policy.
+(ROOT/'_redirects').write_text('/  /he/  302\n',encoding='utf-8')
+(ROOT/'_headers').write_text('''/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/*
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data:; font-src 'self'; style-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; upgrade-insecure-requests
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+''',encoding='utf-8')
+
 (ROOT/'README.md').write_text('''# Scout Finance Premium Website\n\nStatic bilingual (English/Hebrew) corporate website generated from the existing Scout Finance public-site facts.\n\n## Preview locally\n\n```bash\npython3 -m http.server 8080\n```\n\nOpen `http://localhost:8080/en/` or `/he/`.\n\n## Deploy\n\nThe output is fully static and can be deployed to Netlify, Cloudflare Pages, GitHub Pages (with path considerations), or any static host. Contact forms include Netlify Forms markup.\n\n## Important\n\nThe official logo is currently referenced from the existing Scout Finance website URL because the source asset could not be downloaded in this environment. For production, copy the official logo into `assets/` and replace the remote URL in `build_site.py`, then rebuild.\n\nRun `python3 build_site.py` to regenerate all pages after copy changes.\n''',encoding='utf-8')
 
 print('Built', len(all_slugs)*2+3, 'files/pages')
