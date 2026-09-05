@@ -5,7 +5,7 @@ import json, os, textwrap, shutil
 from source.icons import icon
 from source.legal_config import SiteIdentity
 from source.legal_content import POLICIES
-from source.media import media_panel
+from source.media import media_panel, optional_media_panel
 
 SOURCE_ROOT = Path(__file__).resolve().parent
 ROOT = SOURCE_ROOT / 'dist'
@@ -315,10 +315,32 @@ def home_body(lang):
  <section class="section alt"><div class="container"><div class="section-head"><div><h2>{h['faq_title']}</h2></div><a class="text-link" href="{url(lang,'faq')}">{'View all questions' if lang=='en' else 'לכל השאלות'}</a></div><div class="faq-list">{faqs}</div></div></section>
  <section class="section section--tight"><div class="container"><div class="cta-band"><div><h2>{h['final_title']}</h2><p>{h['final_text']}</p></div><div class="actions"><a class="btn btn-primary" href="{url(lang,'contact')}">{c['cta']}</a></div></div></div></section>'''
 
+PAGE_HERO_MEDIA = {
+    'services': 'page-services',
+    'about': 'page-about',
+    'industries': 'page-industries',
+    'audit': 'page-audit',
+    'sox': 'page-sox',
+    'risk-controls': 'page-risk-controls',
+    'financial-advisory': 'page-financial-advisory',
+    'investigative-audit': 'page-investigative-audit',
+    'technology-audit': 'page-technology-audit',
+    'international': 'page-international',
+    'contact': 'page-contact',
+}
+
 def page_hero(lang, slug, p):
     home = copy[lang]['nav']['home'];
     separator = '‹' if lang == 'he' else '/'
-    return f'''<section class="institutional-page-hero page-hero"><div class="container"><div class="breadcrumbs"><a href="{url(lang)}">{home}</a><span aria-hidden="true">{separator}</span><span>{escape(p['title'])}</span></div><div class="eyebrow">{escape(p.get('eyebrow',''))}</div><h1>{escape(p['title'])}</h1><p class="lead">{escape(p['lead'])}</p></div></section>'''
+    hero_class = 'institutional-page-hero page-hero'
+    media_html = ''
+    slot = PAGE_HERO_MEDIA.get(slug)
+    if slot:
+        panel = optional_media_panel(slot, lang, STATIC_ASSETS)
+        if panel:
+            hero_class += ' institutional-page-hero--media'
+            media_html = f'<div class="page-hero-media">{panel}</div>'
+    return f'''<section class="{hero_class}"><div class="container"><div class="breadcrumbs"><a href="{url(lang)}">{home}</a><span aria-hidden="true">{separator}</span><span>{escape(p['title'])}</span></div><div class="eyebrow">{escape(p.get('eyebrow',''))}</div><h1>{escape(p['title'])}</h1><p class="lead">{escape(p['lead'])}</p></div>{media_html}</section>'''
 
 def service_body(lang, slug):
     p=copy[lang]['pages'][slug]; c=copy[lang]; cm=c['service_common']

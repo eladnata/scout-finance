@@ -52,6 +52,94 @@ MEDIA_SLOTS = {
         "height": 1200,
         "alt": {"he": "צוות בארגון בעל שליחות ציבורית.", "en": "A team in a mission-driven organization."},
     },
+    "page-services": {
+        "width": 1800,
+        "height": 1200,
+        "alt": {
+            "he": "אנשי מקצוע בוחנים מסמכים בסביבת עבודה מוסדית.",
+            "en": "Professionals reviewing documents in an institutional working environment.",
+        },
+    },
+    "page-about": {
+        "width": 1800,
+        "height": 1200,
+        "alt": {
+            "he": "סביבת עבודה בוטיק, שקטה ומקצועית.",
+            "en": "A quiet, professional boutique office environment.",
+        },
+    },
+    "page-industries": {
+        "width": 1800,
+        "height": 1200,
+        "alt": {
+            "he": "תשתית תפעולית מורכבת המשקפת פעילות ארגונית רחבה.",
+            "en": "Operational infrastructure reflecting complex organizational scale.",
+        },
+    },
+    "page-audit": {
+        "width": 1800,
+        "height": 1200,
+        "alt": {
+            "he": "בחינה עצמאית של דוחות ומסמכי בקרה מודפסים.",
+            "en": "Independent review of printed reports and control documentation.",
+        },
+    },
+    "page-sox": {
+        "width": 1800,
+        "height": 1200,
+        "alt": {
+            "he": "מפות תהליכים ותיעוד מסודר של בקרות פנימיות.",
+            "en": "Organized process maps and internal-control documentation.",
+        },
+    },
+    "page-risk-controls": {
+        "width": 1800,
+        "height": 1200,
+        "alt": {
+            "he": "סביבה ארגונית מובנית המשקפת פיקוח ובקרה.",
+            "en": "A structured organizational environment reflecting oversight and control.",
+        },
+    },
+    "page-financial-advisory": {
+        "width": 1800,
+        "height": 1200,
+        "alt": {
+            "he": "דיון ניהולי בכיר סביב מסמכים פיננסיים.",
+            "en": "A senior-level working session around financial documents.",
+        },
+    },
+    "page-investigative-audit": {
+        "width": 1800,
+        "height": 1200,
+        "alt": {
+            "he": "בחינה מדוקדקת ומאופקת של תיקים פיזיים.",
+            "en": "A restrained, focused review of physical files.",
+        },
+    },
+    "page-technology-audit": {
+        "width": 1800,
+        "height": 1200,
+        "alt": {
+            "he": "סביבת תשתית טכנולוגית ארגונית מבוקרת.",
+            "en": "A controlled enterprise technology infrastructure environment.",
+        },
+    },
+    "page-international": {
+        "width": 1800,
+        "height": 1200,
+        "alt": {
+            "he": "תשתית עסקית בינלאומית המשקפת פעילות חוצת גבולות.",
+            "en": "International business infrastructure reflecting cross-border operations.",
+        },
+    },
+    "page-contact": {
+        "width": 1800,
+        "height": 1200,
+        "alt": {
+            "he": "כניסה אדריכלית רגועה למשרד מקצועי.",
+            "en": "A calm, architectural entrance to a professional office.",
+        },
+    },
 }
 
 
@@ -106,3 +194,20 @@ def media_panel(slot: str, lang: str, assets_root: Path) -> str:
         f'alt="{alt}" loading="{loading}" decoding="async"{priority}>'
         "</picture>"
     )
+
+
+def optional_media_panel(slot: str, lang: str, assets_root: Path) -> str:
+    """Like media_panel(), but renders nothing when no derivative exists yet.
+
+    media_panel()'s abstract fallback is a dark navy treatment designed for
+    the dark home hero and dark editorial bands. It doesn't fit a light
+    interior-page hero, so callers that decorate a light background (e.g.
+    the institutional page hero) use this instead: real photo if supplied,
+    otherwise an empty string so the existing CSS decoration shows through
+    unchanged.
+    """
+    if slot not in MEDIA_SLOTS:
+        raise ValueError(f"Unknown media slot: {slot}")
+    if not _available_images(slot, assets_root):
+        return ""
+    return media_panel(slot, lang, assets_root)
