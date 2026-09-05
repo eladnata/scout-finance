@@ -25,6 +25,9 @@ if CONTEXT == 'production':
 ROOT.mkdir(parents=True, exist_ok=True)
 ASSETS.mkdir(parents=True, exist_ok=True)
 
+if STATIC_ASSETS.exists():
+    shutil.copytree(STATIC_ASSETS, ASSETS, dirs_exist_ok=True)
+
 logo_url = '/assets/logo.png'
 site_origin = 'https://www.scout-finance.co.il'
 
