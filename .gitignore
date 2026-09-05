@@ -12,6 +12,5 @@ playwright-report/
 !artifacts/**
 !docs/**
 
-# Generated placeholder media — never committed, never shipped
-static/assets/images/**
+# Local Playwright files
 .playwright-mcp/
