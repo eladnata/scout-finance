@@ -44,11 +44,33 @@ class SiteIdentity:
     def validate_for_production(self) -> list[str]:
         return [field for field in ENVIRONMENT_FIELDS if not getattr(self, field.lower())]
 
-    def publication_values(self) -> dict[str, str]:
-        """Safe preview values; production never reaches rendering with missing fields."""
+    def publication_values(self, lang: str = "en") -> dict[str, str]:
+        """Safe preview values; production never reaches rendering with missing fields.
+
+        Fallbacks are language-aware: a Hebrew legal page must never fall back
+        to English prose. Contact details (email, phone) are not translated —
+        only the descriptive fallback text differs by language. The company
+        registration number is public information with a real value, not a
+        "to be completed" placeholder, so it defaults the same in both
+        languages unless overridden by SITE_REGISTRATION_ID.
+        """
+        if lang == "he":
+            return {
+                "legal_name": self.site_legal_name or "Scout Finance – ייעוץ ניהולי, חשבונאות וביקורת",
+                "registration_id": self.site_registration_id or "515178788",
+                "postal_address": self.site_postal_address or "משמר דוד, ישראל",
+                "privacy_email": self.privacy_email or "info@scout-finance.co.il",
+                "accessibility_name": self.accessibility_contact_name or "רכז/ת הנגישות של Scout Finance",
+                "accessibility_email": self.accessibility_contact_email or "info@scout-finance.co.il",
+                "accessibility_phone": self.accessibility_contact_phone or "+972-54-788-2877",
+                "retention_months": self.contact_retention_months or "התקופה התפעולית המאושרת",
+                "effective_date": self.policy_effective_date or "מועד הפרסום",
+                "review_date": self.policy_review_date or "מועד הבחינה המשפטית המתוכנן",
+                "governing_court": self.governing_court or "בתי המשפט המוסמכים בישראל",
+            }
         return {
             "legal_name": self.site_legal_name or "Scout Finance Management Consulting & Audit",
-            "registration_id": self.site_registration_id or "to be completed before publication",
+            "registration_id": self.site_registration_id or "515178788",
             "postal_address": self.site_postal_address or "Mishmar David, Israel",
             "privacy_email": self.privacy_email or "info@scout-finance.co.il",
             "accessibility_name": self.accessibility_contact_name or "Scout Finance accessibility coordinator",

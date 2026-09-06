@@ -1,7 +1,5 @@
 """Placeholder media is generated locally and never ships by default."""
 
-import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -50,23 +48,22 @@ class PlaceholderMedia(unittest.TestCase):
                     actual = produced.width / produced.height
                 self.assertAlmostEqual(actual, expected, places=2, msg=slot)
 
-    def test_default_build_still_renders_the_abstract_fallback(self) -> None:
-        images_dir = ROOT / "static" / "assets" / "images"
-        if images_dir.exists():
-            shutil.rmtree(images_dir)
+    def test_unsupplied_slots_render_the_abstract_fallback(self) -> None:
+        """media_panel() must fall back to the abstract treatment when a slot
+        has no local derivatives — exercised against an isolated, empty
+        temporary assets root so this test never touches the real
+        static/assets/images/ directory, which now holds real, git-tracked
+        production images rather than disposable scratch files."""
+        sys.path.insert(0, str(ROOT))
+        from source.media import MEDIA_SLOTS, media_panel
 
-        environment = dict(os.environ)
-        environment.pop("PLACEHOLDER_MEDIA", None)
-        subprocess.run(
-            [sys.executable, str(ROOT / "build_site.py")],
-            check=True,
-            capture_output=True,
-            env=environment,
-            cwd=ROOT,
-        )
-        html = (ROOT / "dist" / "he" / "index.html").read_text(encoding="utf-8")
-        self.assertIn('class="media-panel media-panel--abstract"', html)
-        self.assertNotIn("placeholder", html.lower())
+        with tempfile.TemporaryDirectory() as directory:
+            empty_assets_root = Path(directory)
+            for slot in MEDIA_SLOTS:
+                html = media_panel(slot, "he", empty_assets_root)
+                self.assertIn('class="media-panel media-panel--abstract"', html)
+                self.assertNotIn("<picture", html)
+                self.assertNotIn("placeholder", html.lower())
 
 
 if __name__ == "__main__":
