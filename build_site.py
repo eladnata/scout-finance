@@ -359,9 +359,7 @@ def legal_policy_body(lang, slug):
     for heading, paragraph in policy['sections'].values():
         rendered = paragraph.format_map(values)
         sections.append(f'<section class="legal-section"><h2>{escape(heading)}</h2><p>{escape(rendered)}</p></section>')
-    review_note = ('Operational draft — external legal and accessibility approvals are required before production publication.' if lang=='en' else 'טיוטה תפעולית — נדרשים אישור משפטי ובדיקת נגישות חיצוניים לפני פרסום בסביבת הייצור.')
-    review_markup = '' if CONTEXT == 'production' else f'<div class="legal-review-note" role="note">{review_note}</div>'
-    return page_hero(lang,slug,policy)+f'''<section class="section"><div class="container content-main legal-main">{review_markup}{''.join(sections)}</div></section>'''
+    return page_hero(lang,slug,policy)+f'''<section class="section"><div class="container content-main legal-main">{''.join(sections)}</div></section>'''
 
 def generic_body(lang, slug):
     p=copy[lang]['pages'][slug]; h=copy[lang]['home'];
