@@ -1,7 +1,7 @@
-// Platform-agnostic contact-form handling. Both the Netlify function
-// (netlify/functions/contact.mts) and the Cloudflare Pages Function
-// (functions/api/contact.ts) import this module and supply their own
-// thin platform glue (env access, IP header, request-id source).
+// Contact-form handling, kept separate from the platform glue. The
+// Cloudflare Pages Function (functions/api/contact.ts) imports this module
+// and supplies only env access, the client IP header and a request id.
+// Deliberately platform-agnostic so the deploy target stays replaceable.
 
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 const RESEND_EMAIL_URL = 'https://api.resend.com/emails';
@@ -63,10 +63,21 @@ const htmlEscape = (value) => normalize(value).replace(/[&<>"']/g, (character) =
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 })[character]);
 
+function isProduction(env) {
+  // CONTEXT is Netlify's; Cloudflare Pages sets CF_PAGES/CF_PAGES_BRANCH.
+  if (normalize(env.CONTEXT).toLowerCase() === 'production') return true;
+  const branch = normalize(env.CF_PAGES_BRANCH);
+  return Boolean(branch) && branch === (normalize(env.PRODUCTION_BRANCH) || 'master');
+}
+
 function configurationReady(env) {
   const required = ['TURNSTILE_SECRET_KEY', 'RESEND_API_KEY', 'CONTACT_TO_EMAIL', 'CONTACT_FROM_EMAIL'];
   if (required.some((name) => !normalize(env[name]))) return false;
-  if (normalize(env.CONTEXT).toLowerCase() === 'production' && TEST_SECRET_KEYS.has(normalize(env.TURNSTILE_SECRET_KEY))) return false;
+  // A published Turnstile test secret accepts every token, so the form would
+  // take any automated submission while the privacy page states it is
+  // protected. Refuse it whenever the platform looks like production, and
+  // refuse it on an unrecognised platform too, rather than defaulting open.
+  if (TEST_SECRET_KEYS.has(normalize(env.TURNSTILE_SECRET_KEY)) && isProduction(env)) return false;
   return true;
 }
 

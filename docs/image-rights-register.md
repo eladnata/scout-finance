@@ -21,3 +21,19 @@ No photographic asset may be published until its source, author, licence and app
 | `sector-purpose` | P2 — mission-driven organization in authentic activity; coordinated documentary treatment. | 1600×1200, 4:3 | AI-generated (ChatGPT image generation), no source URL | N/A — synthetic, no human photographer | N/A — no third-party licence; depicts fictional people | 2026-09-04 | Not required (synthetic) | No |
 
 Final approval must confirm the exact crop, localized alternative text, model/property releases where applicable, and any required on-page attribution.
+
+## Status at publication (21 September 2026)
+
+These images are live. No row above is marked `Approved: Yes`, so the decision
+recorded here is still outstanding — see item 4 in `docs/publication-readiness.md`.
+
+Mitigation now in place: the terms of use carry an express statement, in both
+languages, that photographs and illustrations are editorial and illustrative, and
+that other than identified portraits of the firm's own personnel they do not depict
+the firm's staff, offices, clients or actual engagements. On-page alternative text
+describes what each image shows and does not attribute it to the firm.
+
+That disclosure addresses the risk of a visitor reading synthetic people as Scout
+Finance staff. It does not decide the separate question the register raises above:
+whether synthetic documentary-style photography is an appropriate way for an audit
+practice to present itself. That remains a judgement for the firm.

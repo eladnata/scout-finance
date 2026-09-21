@@ -13,45 +13,108 @@ Open `/he/` or `/en/` in the local server. The deployable output is only `dist/`
 
 ## Deploy
 
-The repository is configured for Netlify in `netlify.toml`. Contact forms post to the same-origin `/api/contact` Netlify Function. That function validates the request and Cloudflare Turnstile token server-side, then uses the Resend HTTPS API to deliver the message. It does not use Netlify Forms.
+The site deploys to **Cloudflare Pages** through its GitHub integration: a push to
+`master` triggers a production build and deploy. There is no deploy command to run
+and no `wrangler.toml` — the build command (`python3 build_site.py`) and output
+directory (`dist`) are configured in the Cloudflare dashboard.
 
-Do not place secrets in `netlify.toml`, source files or generated HTML. Configure them in the Netlify environment. Form delivery is intentionally unavailable until every production variable is set and an end-to-end staging submission has been received and verified.
+`build_site.py` generates `dist/_headers` and `dist/_redirects`, which is how
+Cloudflare Pages receives the security headers, the cache policy and the
+root-to-`/he/` redirect. They are asserted by `tests/test_site_output.py`; edit the
+generator, never the generated files.
 
-### Production identity and policy variables
+Contact forms post to the same-origin `/api/contact` Cloudflare Pages Function
+(`functions/api/contact.ts`), which is a thin wrapper over
+`shared/contact-handler.mts`. That handler validates the request, verifies the
+Cloudflare Turnstile token server-side, and delivers the message through the Resend
+HTTPS API.
 
-| Variable | Purpose |
-| --- | --- |
-| `SITE_LEGAL_NAME` | Full registered operator name shown in policies. |
-| `SITE_REGISTRATION_ID` | Company, partnership or other registration number. |
-| `SITE_POSTAL_ADDRESS` | Address for formal and privacy correspondence. |
-| `PRIVACY_EMAIL` | Monitored address for data-subject requests. |
-| `ACCESSIBILITY_CONTACT_NAME` | Named accessibility contact or role. |
-| `ACCESSIBILITY_CONTACT_EMAIL` | Monitored accessibility email. |
-| `ACCESSIBILITY_CONTACT_PHONE` | Accessibility contact telephone number. |
-| `CONTACT_RETENTION_MONTHS` | Approved maximum contact-enquiry retention period. |
-| `POLICY_EFFECTIVE_DATE` | Counsel-approved effective date rendered in policies. |
-| `POLICY_REVIEW_DATE` | Scheduled review date rendered in policies. |
-| `GOVERNING_COURT` | Counsel-approved court and jurisdiction wording. |
+Do not place secrets in source files or generated HTML. Configure them as
+environment variables in the Cloudflare Pages project.
 
-Production builds fail if any value above is absent. This protects the live site from publishing preview identity text.
+### How the build knows it is in production
+
+Cloudflare Pages sets `CF_PAGES=1` and `CF_PAGES_BRANCH`. The build treats a build
+as production when `CF_PAGES_BRANCH` matches `PRODUCTION_BRANCH` (default `master`),
+or when `CONTEXT=production` is set explicitly. This matters: the original gate
+tested only `CONTEXT`, which Cloudflare never sets, so every production build ran in
+preview mode and published preview legal text.
+
+### Publication identity
+
+Company identity is public record — verified against the Israeli Registrar of
+Companies for company number 515178788 — so it ships as a verified default in
+`source/legal_config.py` rather than as a required environment variable. A forgotten
+variable must never be able to put placeholder text on a published legal page.
+
+The variables below override those defaults. They exist for the values that are
+judgement calls rather than public record, so counsel can change them without a code
+change.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SITE_LEGAL_NAME` | Registrar-verified | Registered operator name shown in policies. |
+| `SITE_REGISTRATION_ID` | `515178788` | Company registration number. |
+| `SITE_POSTAL_ADDRESS` | Registrar-verified | Address for formal and privacy correspondence. |
+| `PRIVACY_EMAIL` | `info@scout-finance.co.il` | Monitored address for data-subject requests. |
+| `ACCESSIBILITY_CONTACT_NAME` | Role label | Named accessibility contact. Required to be a formally appointed רכז נגישות at 25+ employees. |
+| `ACCESSIBILITY_CONTACT_EMAIL` | `info@scout-finance.co.il` | Monitored accessibility email. |
+| `ACCESSIBILITY_CONTACT_PHONE` | `+972-54-788-2877` | Accessibility contact telephone number. |
+| `CONTACT_RETENTION_MONTHS` | `24` | Retention period stated in the privacy policy. **Confirm with counsel.** |
+| `POLICY_EFFECTIVE_DATE` | 21 September 2026 | Effective date rendered in policies. |
+| `POLICY_REVIEW_DATE` | 21 September 2027 | Scheduled review date rendered in policies. |
+| `GOVERNING_COURT` | Competent courts in Israel | Forum clause in the terms of use. |
 
 ### Contact security and delivery variables
 
 | Variable | Secret | Purpose |
 | --- | --- | --- |
-| `TURNSTILE_SITE_KEY` | No | Public Cloudflare widget key injected during the build. The Cloudflare test key is rejected in production. |
+| `TURNSTILE_SITE_KEY` | No | Public Cloudflare widget key injected during the build. See the note below. |
 | `TURNSTILE_SECRET_KEY` | Yes | Server-side Siteverify credential. Published Cloudflare test secrets are rejected in production. |
-| `TURNSTILE_EXPECTED_HOSTNAME` | No | Exact hostname expected in a successful Turnstile response, normally `www.scout-finance.co.il`. |
+| `TURNSTILE_EXPECTED_HOSTNAME` | No | Exact hostname expected in a successful Turnstile response. |
 | `RESEND_API_KEY` | Yes | Server-side Resend API credential. |
-| `CONTACT_TO_EMAIL` | Sensitive configuration | Verified destination mailbox for enquiries. |
+| `CONTACT_TO_EMAIL` | Sensitive | Verified destination mailbox for enquiries. |
 | `CONTACT_FROM_EMAIL` | No | Sender on a domain verified in Resend. |
-| `CONTACT_ALLOWED_ORIGIN` | No | Optional exact form origin; defaults to `SITE_ORIGIN` and then the production site origin. |
+| `CONTACT_ALLOWED_ORIGIN` | No | Exact form origin; defaults to `SITE_ORIGIN`, then the production site origin. |
 | `SITE_ORIGIN` | No | Canonical same-origin value used by the server request check. |
 
-After configuration, verify on a staging deploy that Turnstile succeeds, the email arrives, Reply-To targets the visitor address, no form contents appear in function logs, and the production hostname matches exactly.
+**The contact form is only published when it can work.** In a production build
+without a real `TURNSTILE_SITE_KEY`, the form is replaced by direct email and
+telephone details, and the Turnstile script is not loaded. With Cloudflare's test
+key the widget always passes in the browser and the submission then fails
+server-side, while the privacy and cookies pages state that Turnstile protects the
+form — publishing direct contact details instead keeps those statements true.
+Setting a real key restores the form automatically on the next build.
+
+After configuration, verify on a preview deploy that Turnstile succeeds, the email
+arrives, Reply-To targets the visitor address, no form contents appear in function
+logs, and the production hostname matches exactly.
+
+## Legal and accessibility copy
+
+`source/legal_content.py` holds the privacy policy, cookie notice, terms of use and
+accessibility statement in both languages, with the statutory references each
+section is drawn from recorded in the module docstring. Every factual claim in the
+accessibility statement is verifiable against the built markup — do not add a claim
+the markup does not support.
+
+`docs/publication-readiness.md` records what still requires a decision from the firm
+or its counsel before the site is treated as finally approved.
 
 ## Source assets
 
-Approved brand assets live in `static/assets/` and are copied into `dist/assets/` at build time. Do not edit generated HTML, CSS or JavaScript directly; update `build_site.py` or `static/` and rebuild.
+Approved brand assets live in `static/assets/` and are copied into `dist/assets/` at
+build time. Do not edit generated HTML, CSS or JavaScript directly; update
+`build_site.py` or `static/` and rebuild.
 
-Editorial image requirements and rights status are maintained in `docs/image-rights-register.md`. No supplied image is a production asset until its source, author, licence, crop, alternative text and approval are recorded there.
+Editorial image requirements and rights status are maintained in
+`docs/image-rights-register.md`. No supplied image is a production asset until its
+source, author, licence, crop, alternative text and approval are recorded there.
+
+## Tests
+
+```bash
+python3 -m unittest discover -s tests -p "test_*.py"   # build, legal and deploy invariants
+npx playwright test                                     # browser, axe accessibility, form flows
+node --test tests/contact-function.test.mjs             # contact handler
+```

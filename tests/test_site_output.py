@@ -95,12 +95,25 @@ class SiteOutputTests(unittest.TestCase):
                 f'href="/{lang}/audit/" aria-current="page"', audit
             )
 
-    def test_unsupplied_images_render_finished_accessible_fallbacks(self) -> None:
+    def test_every_image_slot_renders_a_finished_accessible_panel(self) -> None:
+        """No image slot may render as an unfinished or unlabelled state.
+
+        A slot with an approved asset renders a <picture> carrying alt text;
+        a slot without one renders the accessible abstract fallback. Both are
+        finished states, and neither may leak the word "placeholder". The
+        earlier version of this test asserted the fallback specifically, which
+        stopped being true once real photography was supplied.
+        """
         for lang in ("he", "en"):
             html = (DIST / lang / "index.html").read_text(encoding="utf-8")
             self.assertIn('data-image-slot="hero"', html)
-            self.assertIn('class="media-panel media-panel--abstract"', html)
             self.assertNotIn("placeholder", html.lower())
+            panels = re.findall(r'<picture class="media-panel.*?</picture>', html, re.S)
+            self.assertTrue(panels, f"{lang} home page renders no media panel")
+            for panel in panels:
+                if "media-panel--abstract" in panel:
+                    continue
+                self.assertRegex(panel, r'<img[^>]+alt="[^"]+"', panel[:200])
 
     def test_image_rights_register_has_every_slot(self) -> None:
         register = (ROOT / "docs" / "image-rights-register.md").read_text(
@@ -147,26 +160,104 @@ class SiteOutputTests(unittest.TestCase):
                 self.assertTrue((DIST / lang / slug / "index.html").exists())
                 self.assertIn(f'href="/{lang}/{slug}/"', footer)
 
-    def test_production_identity_validation_names_every_missing_value(self) -> None:
+    def test_legal_identity_resolves_without_any_environment(self) -> None:
+        """Publication must not depend on remembering an environment variable.
+
+        The earlier contract required all eleven values to be supplied in
+        production. On Cloudflare they never were, so the live policy shipped
+        "to be completed before publication". Company identity is public
+        record, so it now ships as a verified default and this asserts that
+        nothing renders blank.
+        """
         from source.legal_config import SiteIdentity
 
-        missing = SiteIdentity.from_environment({}).validate_for_production()
-        self.assertEqual(
-            missing,
-            [
-                "SITE_LEGAL_NAME",
-                "SITE_REGISTRATION_ID",
-                "SITE_POSTAL_ADDRESS",
-                "PRIVACY_EMAIL",
-                "ACCESSIBILITY_CONTACT_NAME",
-                "ACCESSIBILITY_CONTACT_EMAIL",
-                "ACCESSIBILITY_CONTACT_PHONE",
-                "CONTACT_RETENTION_MONTHS",
-                "POLICY_EFFECTIVE_DATE",
-                "POLICY_REVIEW_DATE",
-                "GOVERNING_COURT",
-            ],
+        identity = SiteIdentity.from_environment({})
+        self.assertEqual(identity.validate_for_production(), [])
+        for lang in ("he", "en"):
+            values = identity.publication_values(lang)
+            for key, value in values.items():
+                self.assertTrue(str(value).strip(), f"{lang}/{key} is blank")
+            self.assertEqual(values["registration_id"], "515178788")
+
+    def test_blank_environment_override_is_reported(self) -> None:
+        from source.legal_config import SiteIdentity
+
+        identity = SiteIdentity.from_environment({"GOVERNING_COURT": "   "})
+        self.assertEqual(identity.publication_values("he")["governing_court"], "בתי המשפט המוסמכים בישראל")
+
+    def test_environment_override_wins_over_default(self) -> None:
+        from source.legal_config import SiteIdentity
+
+        identity = SiteIdentity.from_environment({"CONTACT_RETENTION_MONTHS": "12"})
+        self.assertEqual(identity.publication_values("he")["retention_months"], "12")
+
+    def test_published_legal_pages_carry_no_placeholder_or_wrong_vendor(self) -> None:
+        """Guards the three defects that reached the live site.
+
+        Unsubstituted {tokens}, preview identity text, the operational-draft
+        banner, and Netlify named as the host after the move to Cloudflare.
+        """
+        banned = (
+            "to be completed",
+            "Operational draft",
+            "טיוטה תפעולית",
+            "legal-review-note",
+            "Netlify",
+            "התקופה התפעולית המאושרת",
+            "the approved operational period",
+            "מועד הבחינה המשפטית המתוכנן",
         )
+        for lang in ("he", "en"):
+            for slug in ("privacy", "cookies", "terms", "accessibility"):
+                html = (DIST / lang / slug / "index.html").read_text(encoding="utf-8")
+                self.assertNotRegex(html, r"\{[a-z_]+\}", f"{lang}/{slug} has an unsubstituted token")
+                for phrase in banned:
+                    self.assertNotIn(phrase, html, f"{lang}/{slug} still contains {phrase!r}")
+
+    def test_accessibility_statement_meets_regulation_35(self) -> None:
+        """Regulation 35(e) content: adaptations, contact route, and the standard."""
+        for lang, needles in {
+            "he": ("תקנה 35", "5568", "WCAG", "דיווח על חסם נגישות", "info@scout-finance.co.il", "+972-54-788-2877"),
+            "en": ("regulation 35", "5568", "WCAG", "Reporting a barrier", "info@scout-finance.co.il", "+972-54-788-2877"),
+        }.items():
+            html = (DIST / lang / "accessibility" / "index.html").read_text(encoding="utf-8")
+            for needle in needles:
+                self.assertIn(needle, html, f"{lang} accessibility statement is missing {needle!r}")
+
+    def test_privacy_policy_states_the_section_11_notice_elements(self) -> None:
+        html = (DIST / "he" / "privacy" / "index.html").read_text(encoding="utf-8")
+        for needle in (
+            "515178788",            # controller identity
+            "מרצון",                 # voluntary disclosure
+            "לא ניתן יהיה לשלוח",     # consequence of refusing
+            "Cloudflare",           # recipients
+            "מחוץ לישראל",           # cross-border transfer
+            "רשות להגנת הפרטיות",    # complaint route
+        ):
+            self.assertIn(needle, html, f"privacy policy is missing {needle!r}")
+
+    def test_contact_form_is_not_published_with_the_turnstile_test_key(self) -> None:
+        """A form that cannot work must not be offered as if it can.
+
+        With Cloudflare's test key the widget always passes in the browser and
+        the submission then fails server-side, while the privacy and cookies
+        pages state that Turnstile protects the form.
+        """
+        import subprocess, sys, os
+
+        env = dict(os.environ, CF_PAGES="1", CF_PAGES_BRANCH="master")
+        env.pop("TURNSTILE_SITE_KEY", None)
+        try:
+            subprocess.run([sys.executable, "build_site.py"], cwd=ROOT, env=env, check=True, capture_output=True)
+            for lang in ("he", "en"):
+                html = (DIST / lang / "contact" / "index.html").read_text(encoding="utf-8")
+                self.assertNotIn("1x00000000000000000000AA", html)
+                self.assertNotIn('class="contact-form"', html)
+                self.assertIn("contact-form--direct", html)
+                self.assertIn("mailto:info@scout-finance.co.il", html)
+                self.assertNotIn("turnstile/v0/api.js", html)
+        finally:
+            subprocess.run([sys.executable, "build_site.py"], cwd=ROOT, check=True, capture_output=True)
 
     def test_legal_content_is_parallel_and_storage_is_disclosed(self) -> None:
         from source.legal_content import LEGAL_SECTION_KEYS, POLICIES
@@ -261,60 +352,86 @@ class SiteOutputTests(unittest.TestCase):
                     target /= "index.html"
                 self.assertTrue(target.exists(), f"{page}: {href}")
 
-    def test_deploy_configuration_publishes_dist_with_security_headers(self) -> None:
-        config = (ROOT / "netlify.toml").read_text(encoding="utf-8")
-        self.assertIn('publish = "dist"', config)
-        self.assertIn('to = "/he/"', config)
-        self.assertIn("Content-Security-Policy", config)
-        self.assertIn("Cache-Control", config)
-
-    def test_security_headers_allow_only_required_turnstile_browser_domains(self) -> None:
-        config = (ROOT / "netlify.toml").read_text(encoding="utf-8")
-        self.assertIn("object-src 'none'", config)
-        self.assertIn("upgrade-insecure-requests", config)
-        self.assertIn("Strict-Transport-Security", config)
-        self.assertIn("https://challenges.cloudflare.com", config)
-        self.assertNotIn("api.resend.com", config)
-
-    def test_cloudflare_pages_config_matches_netlify_security_headers(self) -> None:
-        headers = (DIST / "_headers").read_text(encoding="utf-8")
+    def test_cloudflare_deploy_config_is_generated_into_dist(self) -> None:
+        """Cloudflare Pages reads _headers and _redirects from the published
+        directory. These used to be cross-checked against netlify.toml; the
+        Netlify target is gone, so the generated files are now the only
+        source of truth and are asserted directly."""
         redirects = (DIST / "_redirects").read_text(encoding="utf-8")
-        netlify_config = (ROOT / "netlify.toml").read_text(encoding="utf-8")
+        headers = (DIST / "_headers").read_text(encoding="utf-8")
         self.assertIn("/he/", redirects)
-        self.assertIn("Content-Security-Policy", headers)
-        self.assertIn("https://challenges.cloudflare.com", headers)
-        self.assertIn("Strict-Transport-Security", headers)
-        self.assertIn("Cache-Control", headers)
-        self.assertNotIn("api.resend.com", headers)
-        # The two configs are hand-kept in sync; catch drift by comparing the
-        # actual CSP directive string, not just presence of the header name.
-        netlify_csp = re.search(r'Content-Security-Policy = "([^"]+)"', netlify_config)
-        headers_csp = re.search(r"Content-Security-Policy: (.+)", headers)
-        self.assertIsNotNone(netlify_csp)
-        self.assertIsNotNone(headers_csp)
-        self.assertEqual(netlify_csp.group(1), headers_csp.group(1).strip())
+        self.assertIn("/assets/*", headers)
+        self.assertIn("immutable", headers)
 
-    def test_cloudflare_pages_function_shares_the_netlify_contact_logic(self) -> None:
+    def test_security_headers_carry_the_full_policy(self) -> None:
+        headers = (DIST / "_headers").read_text(encoding="utf-8")
+        match = re.search(r"Content-Security-Policy: (.+)", headers)
+        self.assertIsNotNone(match)
+        policy = match.group(1).strip()
+        directives = {
+            part.strip().split(" ")[0]: part.strip()
+            for part in policy.split(";")
+            if part.strip()
+        }
+        self.assertEqual(directives["default-src"], "default-src 'self'")
+        self.assertEqual(directives["base-uri"], "base-uri 'self'")
+        self.assertEqual(directives["form-action"], "form-action 'self'")
+        self.assertEqual(directives["frame-ancestors"], "frame-ancestors 'none'")
+        self.assertEqual(directives["object-src"], "object-src 'none'")
+        self.assertIn("https://challenges.cloudflare.com", directives["script-src"])
+        self.assertIn("https://challenges.cloudflare.com", directives["frame-src"])
+        self.assertIn("upgrade-insecure-requests", policy)
+        # The Resend host carries the API key and must only ever be reached
+        # from the server function, never from a browser.
+        self.assertNotIn("api.resend.com", headers)
+        for header in (
+            "Strict-Transport-Security",
+            "X-Content-Type-Options",
+            "X-Frame-Options",
+            "Referrer-Policy",
+            "Permissions-Policy",
+            "Cross-Origin-Opener-Policy",
+        ):
+            self.assertIn(header, headers)
+
+    def test_cloudflare_function_delegates_to_the_shared_handler(self) -> None:
         cloudflare_function = (ROOT / "functions" / "api" / "contact.ts").read_text(encoding="utf-8")
-        netlify_function = (ROOT / "netlify" / "functions" / "contact.mts").read_text(encoding="utf-8")
         self.assertIn("shared/contact-handler", cloudflare_function)
-        self.assertIn("shared/contact-handler", netlify_function)
         self.assertIn("handleContact", cloudflare_function)
         self.assertIn("CF-Connecting-IP", cloudflare_function)
+        self.assertFalse((ROOT / "netlify.toml").exists(), "Netlify config should be gone")
+        self.assertFalse((ROOT / "netlify").exists(), "Netlify functions should be gone")
 
-    def test_production_build_rejects_missing_legal_identity(self) -> None:
-        env = {"CONTEXT": "production", "PATH": os.environ.get("PATH", "")}
-        result = subprocess.run(
-            [sys.executable, "build_site.py"],
-            cwd=ROOT,
-            env=env,
-            text=True,
-            capture_output=True,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn(
-            "Missing production legal configuration", result.stderr + result.stdout
-        )
+    def test_production_build_publishes_clean_legal_pages(self) -> None:
+        """A Cloudflare production build must succeed and ship no preview text.
+
+        The build used to hard-fail when the legal environment variables were
+        absent. On Cloudflare they always were absent and the gate itself
+        never ran, so the preview text shipped regardless. Identity is now a
+        verified default, so the guarantee is about the published output
+        rather than about remembering to set an environment variable.
+        """
+        env = dict(os.environ, CF_PAGES="1", CF_PAGES_BRANCH="master")
+        env.pop("TURNSTILE_SITE_KEY", None)
+        env.pop("CONTEXT", None)
+        try:
+            result = subprocess.run(
+                [sys.executable, "build_site.py"],
+                cwd=ROOT,
+                env=env,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for lang in ("he", "en"):
+                html = (DIST / lang / "privacy" / "index.html").read_text(encoding="utf-8")
+                self.assertNotRegex(html, r"\{[a-z_]+\}")
+                self.assertIn("515178788", html)
+                self.assertNotIn("Netlify", html)
+        finally:
+            subprocess.run(
+                [sys.executable, "build_site.py"], cwd=ROOT, check=True, capture_output=True
+            )
 
     def test_release_qa_configuration_exists(self) -> None:
         package = (ROOT / "package.json").read_text(encoding="utf-8")

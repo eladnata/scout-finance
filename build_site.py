@@ -11,17 +11,33 @@ SOURCE_ROOT = Path(__file__).resolve().parent
 ROOT = SOURCE_ROOT / 'dist'
 ASSETS = ROOT / 'assets'
 STATIC_ASSETS = SOURCE_ROOT / 'static' / 'assets'
+# Production detection. CONTEXT is Netlify's variable; Cloudflare Pages sets
+# CF_PAGES=1 and CF_PAGES_BRANCH instead. Relying on CONTEXT alone is why the
+# production gate never fired on Cloudflare and preview legal text reached the
+# live site.
 CONTEXT = os.environ.get('CONTEXT', '').strip().lower()
+CF_PAGES = os.environ.get('CF_PAGES', '').strip() == '1'
+CF_PAGES_BRANCH = os.environ.get('CF_PAGES_BRANCH', '').strip()
+PRODUCTION_BRANCH = os.environ.get('PRODUCTION_BRANCH', '').strip() or 'master'
+IS_PRODUCTION = CONTEXT == 'production' or (CF_PAGES and CF_PAGES_BRANCH == PRODUCTION_BRANCH)
+
 PLACEHOLDER_MEDIA = os.environ.get('PLACEHOLDER_MEDIA', '').strip() == '1'
 SITE_IDENTITY = SiteIdentity.from_environment(os.environ)
 TURNSTILE_TEST_SITE_KEY = '1x00000000000000000000AA'
 TURNSTILE_SITE_KEY = os.environ.get('TURNSTILE_SITE_KEY', '').strip() or TURNSTILE_TEST_SITE_KEY
-if CONTEXT == 'production':
-    missing_legal_values = SITE_IDENTITY.validate_for_production()
-    if missing_legal_values:
-        raise SystemExit('Missing production legal configuration: ' + ', '.join(missing_legal_values))
-    if not TURNSTILE_SITE_KEY or TURNSTILE_SITE_KEY == TURNSTILE_TEST_SITE_KEY:
-        raise SystemExit('Missing or unsafe production Turnstile site key: TURNSTILE_SITE_KEY')
+
+# Only render the contact form where it can actually work. With Cloudflare's
+# test key the widget always passes in the browser, so a visitor gets a form
+# that looks protected and a submission that then fails server-side, while the
+# privacy and cookies pages state that Turnstile guards the form. Publishing
+# direct contact details instead keeps those statements true. Setting a real
+# TURNSTILE_SITE_KEY restores the form automatically.
+CONTACT_FORM_ENABLED = (not IS_PRODUCTION) or TURNSTILE_SITE_KEY != TURNSTILE_TEST_SITE_KEY
+
+if IS_PRODUCTION:
+    blank_legal_values = SITE_IDENTITY.validate_for_production()
+    if blank_legal_values:
+        raise SystemExit('Blank production legal configuration: ' + ', '.join(blank_legal_values))
 ROOT.mkdir(parents=True, exist_ok=True)
 ASSETS.mkdir(parents=True, exist_ok=True)
 
@@ -285,7 +301,7 @@ def doc(lang, slug, title, desc, body):
         schema_tags += f'<script type="application/ld+json">{breadcrumb_schema(lang, title, slug)}</script>'
     disclosure_text = ('This site uses essential local storage and Cloudflare security technology only. No analytics or advertising tools are loaded.' if lang=='en' else 'אתר זה משתמש באחסון מקומי חיוני ובטכנולוגיית האבטחה של Cloudflare בלבד. לא נטענים כלי אנליטיקה או פרסום.')
     disclosure = f'''<aside class="privacy-disclosure" data-privacy-disclosure aria-label="{c['privacy_settings']}"><p>{disclosure_text}</p><div class="privacy-actions"><a href="{url(lang,'cookies')}">{c['privacy_details']}</a><button type="button" class="btn btn-primary" data-privacy-accept>{c['privacy_accept']}</button></div></aside>'''
-    turnstile_script = '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>' if slug == 'contact' else ''
+    turnstile_script = '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>' if slug == 'contact' and CONTACT_FORM_ENABLED else ''
     return f'''<!doctype html><html lang="{lang}" dir="{c['dir']}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="{escape(desc)}"><meta name="robots" content="{robots}"><title>{escape(title)} | Scout Finance</title><link rel="canonical" href="{site_origin}{path}"><link rel="alternate" hreflang="en" href="{site_origin}{url('en',same)}"><link rel="alternate" hreflang="he" href="{site_origin}{url('he',same)}"><link rel="alternate" hreflang="x-default" href="{site_origin}{xdefault}"><link rel="icon" href="/assets/favicon.ico"><meta property="og:title" content="{escape(title)} | Scout Finance"><meta property="og:description" content="{escape(desc)}"><meta property="og:url" content="{site_origin}{path}"><meta property="og:image" content="{site_origin}/assets/og/scout-finance-share.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:type" content="website"><meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#071b33"><link rel="stylesheet" href="/assets/styles.css">{schema_tags}</head><body dir="{c['dir']}" class="{'rtl' if lang=='he' else ''}">{header(lang, same)}<main id="main-content" tabindex="-1">{body}</main>{footer(lang)}{disclosure}<script src="/assets/site.js" defer></script>{turnstile_script}</body></html>'''
 
 def home_body(lang):
@@ -416,7 +432,10 @@ def generic_body(lang, slug):
             consent = consent.replace('מדיניות הפרטיות', f'<a href="/{lang}/privacy/">מדיניות הפרטיות</a>')
         notice = (f'Providing information is voluntary. Name, email, message and acknowledgement are required so we can respond. Authorized firm personnel and our hosting, anti-abuse and email providers may process the submission. Do not send confidential or sensitive information. <a href="/{lang}/privacy/">Read about purposes, recipients, retention and your rights.</a>' if lang=='en' else f'מסירת המידע היא מרצון. שם, דוא״ל, הודעה ואישור נדרשים כדי שנוכל להשיב. אנשי משרד מורשים וספקי האחסון, מניעת השימוש לרעה והדוא״ל עשויים לעבד את הפנייה. אין לשלוח מידע חסוי או רגיש. <a href="/{lang}/privacy/">למידע על המטרות, הנמענים, תקופת השמירה והזכויות שלכם.</a>')
         security_label = 'Security verification' if lang=='en' else 'אימות אבטחה'
-        body+=f'''<section class="section"><div class="container contact-layout"><div><div class="contact-meta"><div>{icon('contact',css_class='grid-icon')}<span class="contact-label">{copy[lang]['nav']['email']}</span><a class="contact-value" dir="ltr" href="mailto:info@scout-finance.co.il">info@scout-finance.co.il</a></div><div>{icon('phone',css_class='grid-icon')}<span class="contact-label">{copy[lang]['nav']['phone']}</span><a class="contact-value" dir="ltr" href="tel:+972547882877">+972-54-788-2877</a></div><div>{icon('location',css_class='grid-icon')}<span class="contact-label">{form_copy['location']}</span><span class="contact-value">{'משמר דוד, ישראל' if lang=='he' else 'Mishmar David, Israel'}</span></div></div><p>{copy[lang]['response']}</p></div><form class="contact-form" name="contact-{lang}" method="POST" action="/api/contact"><input type="hidden" name="lang" value="{lang}"><p class="visually-hidden"><label for="{lang}-website">{form_copy['website']} <input id="{lang}-website" name="website" tabindex="-1" autocomplete="off"></label></p><div class="collection-notice" role="note"><strong>{'Before you submit' if lang=='en' else 'לפני השליחה'}</strong><p>{notice}</p></div><div class="form-grid"><div class="field"><label for="{lang}-name">{labels['name']} *</label><input id="{lang}-name" name="name" required maxlength="120" autocomplete="name"></div><div class="field"><label for="{lang}-organization">{labels['company']}</label><input id="{lang}-organization" name="organization" maxlength="160" autocomplete="organization"></div><div class="field"><label for="{lang}-email">{labels['email']} *</label><input id="{lang}-email" type="email" name="email" required maxlength="254" autocomplete="email"></div><div class="field"><label for="{lang}-phone">{labels['phone']}</label><input id="{lang}-phone" type="tel" name="phone" maxlength="40" autocomplete="tel"></div><div class="field full"><label for="{lang}-message">{labels['message']} *</label><textarea id="{lang}-message" name="message" required maxlength="5000"></textarea></div><div class="field full"><label class="consent" for="{lang}-consent"><input id="{lang}-consent" type="checkbox" name="privacy_ack" value="yes" required> <span>{consent}</span></label></div><div class="field full turnstile-shell"><span class="turnstile-label visually-hidden">{security_label}</span><input type="hidden" name="cf-turnstile-response" data-turnstile-token required><div class="cf-turnstile" data-sitekey="{escape(TURNSTILE_SITE_KEY)}" data-appearance="interaction-only" data-response-field="false" data-callback="scoutTurnstileSuccess" data-expired-callback="scoutTurnstileExpired" data-error-callback="scoutTurnstileExpired"></div></div><div class="field full"><button class="btn btn-primary" type="submit" data-idle-label="{labels['submit']}">{labels['submit']}</button><p class="form-status" role="status" aria-live="polite" tabindex="-1"></p></div></div></form></div></section>'''
+        form_markup = f'''<form class="contact-form" name="contact-{lang}" method="POST" action="/api/contact"><input type="hidden" name="lang" value="{lang}"><p class="visually-hidden"><label for="{lang}-website">{form_copy['website']} <input id="{lang}-website" name="website" tabindex="-1" autocomplete="off"></label></p><div class="collection-notice" role="note"><strong>{'Before you submit' if lang=='en' else 'לפני השליחה'}</strong><p>{notice}</p></div><div class="form-grid"><div class="field"><label for="{lang}-name">{labels['name']} *</label><input id="{lang}-name" name="name" required maxlength="120" autocomplete="name"></div><div class="field"><label for="{lang}-organization">{labels['company']}</label><input id="{lang}-organization" name="organization" maxlength="160" autocomplete="organization"></div><div class="field"><label for="{lang}-email">{labels['email']} *</label><input id="{lang}-email" type="email" name="email" required maxlength="254" autocomplete="email"></div><div class="field"><label for="{lang}-phone">{labels['phone']}</label><input id="{lang}-phone" type="tel" name="phone" maxlength="40" autocomplete="tel"></div><div class="field full"><label for="{lang}-message">{labels['message']} *</label><textarea id="{lang}-message" name="message" required maxlength="5000"></textarea></div><div class="field full"><label class="consent" for="{lang}-consent"><input id="{lang}-consent" type="checkbox" name="privacy_ack" value="yes" required> <span>{consent}</span></label></div><div class="field full turnstile-shell"><span class="turnstile-label visually-hidden">{security_label}</span><input type="hidden" name="cf-turnstile-response" data-turnstile-token required><div class="cf-turnstile" data-sitekey="{escape(TURNSTILE_SITE_KEY)}" data-appearance="interaction-only" data-response-field="false" data-callback="scoutTurnstileSuccess" data-expired-callback="scoutTurnstileExpired" data-error-callback="scoutTurnstileExpired"></div></div><div class="field full"><button class="btn btn-primary" type="submit" data-idle-label="{labels['submit']}">{labels['submit']}</button><p class="form-status" role="status" aria-live="polite" tabindex="-1"></p></div></div></form>'''
+        direct_markup = f'''<div class="contact-form contact-form--direct"><h2>{'Write to us directly' if lang=='en' else 'כתבו אלינו ישירות'}</h2><p>{'The enquiry form is temporarily unavailable. Please email or call us directly and we will respond within one business day.' if lang=='en' else 'טופס הפנייה אינו זמין כרגע. ניתן לפנות אלינו ישירות בדוא״ל או בטלפון, ונשיב בתוך יום עסקים אחד.'}</p><div class="actions"><a class="btn btn-primary" dir="ltr" href="mailto:info@scout-finance.co.il">info@scout-finance.co.il</a><a class="btn btn-secondary" dir="ltr" href="tel:+972547882877">+972-54-788-2877</a></div></div>'''
+        contact_panel = form_markup if CONTACT_FORM_ENABLED else direct_markup
+        body+=f'''<section class="section"><div class="container contact-layout"><div><div class="contact-meta"><div>{icon('contact',css_class='grid-icon')}<span class="contact-label">{copy[lang]['nav']['email']}</span><a class="contact-value" dir="ltr" href="mailto:info@scout-finance.co.il">info@scout-finance.co.il</a></div><div>{icon('phone',css_class='grid-icon')}<span class="contact-label">{copy[lang]['nav']['phone']}</span><a class="contact-value" dir="ltr" href="tel:+972547882877">+972-54-788-2877</a></div><div>{icon('location',css_class='grid-icon')}<span class="contact-label">{form_copy['location']}</span><span class="contact-value">{'משמר דוד, ישראל' if lang=='he' else 'Mishmar David, Israel'}</span></div></div><p>{copy[lang]['response']}</p></div>{contact_panel}</div></section>'''
     elif slug=='thank-you':
         title, lead = (('Your enquiry was sent', 'We received your details and will respond within one business day.') if lang=='en' else ('הפנייה נשלחה', 'קיבלנו את הפרטים ונחזור אליכם בתוך יום עסקים אחד.'))
         home_label = copy[lang]['nav']['home']
@@ -451,7 +470,7 @@ sitemap='''<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitem
 (ROOT/'sitemap.xml').write_text(sitemap,encoding='utf-8')
 
 # Cloudflare Pages routing/header config (Netlify's equivalents live in
-# netlify.toml). Kept in sync by hand — same CSP, same cache policy.
+# the only deploy surface: Cloudflare Pages reads these from dist/.
 (ROOT/'_redirects').write_text('/  /he/  302\n',encoding='utf-8')
 (ROOT/'_headers').write_text('''/assets/*
   Cache-Control: public, max-age=31536000, immutable

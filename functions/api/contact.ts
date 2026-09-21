@@ -2,6 +2,8 @@ import { handleContact } from '../../shared/contact-handler.mts';
 
 interface Env {
   CONTEXT?: string;
+  CF_PAGES_BRANCH?: string;
+  PRODUCTION_BRANCH?: string;
   SITE_ORIGIN?: string;
   CONTACT_ALLOWED_ORIGIN?: string;
   TURNSTILE_SECRET_KEY?: string;
