@@ -107,6 +107,13 @@ Approved brand assets live in `static/assets/` and are copied into `dist/assets/
 build time. Do not edit generated HTML, CSS or JavaScript directly; update
 `build_site.py` or `static/` and rebuild.
 
+The stylesheet and script are published under content-addressed filenames
+(`styles.<digest>.css`, `site.<digest>.js`) and referenced by that name from every
+page. `dist/_headers` serves `/assets/*` as `max-age=31536000, immutable`, which a
+browser never revalidates; at a fixed filename that pins the old stylesheet on every
+returning visitor for a year, so a shipped CSS change appears to have no effect.
+The digest changes with the bytes, so each build publishes a new URL.
+
 Editorial image requirements and rights status are maintained in
 `docs/image-rights-register.md`. No supplied image is a production asset until its
 source, author, licence, crop, alternative text and approval are recorded there.

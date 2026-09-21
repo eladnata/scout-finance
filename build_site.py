@@ -1,6 +1,6 @@
 from pathlib import Path
 from html import escape
-import json, os, textwrap, shutil
+import hashlib, json, os, textwrap, shutil
 
 from source.icons import icon
 from source.legal_config import SiteIdentity
@@ -225,11 +225,28 @@ SCRIPT = (SOURCE_DIR / 'site.js').read_text(encoding='utf-8')
 if STATIC_ASSETS.exists():
     ignore = None if PLACEHOLDER_MEDIA else shutil.ignore_patterns('images')
     shutil.copytree(STATIC_ASSETS, ASSETS, dirs_exist_ok=True, ignore=ignore)
-(ASSETS/'styles.css').write_bytes(STYLE.encode('utf-8'))
-(ASSETS/'site.js').write_bytes(SCRIPT.encode('utf-8'))
+
+# The stylesheet and script are published under /assets/*, which _headers
+# serves as `max-age=31536000, immutable`. A browser holding an immutable
+# response never revalidates it, so at a fixed filename every CSS change stays
+# invisible to returning visitors for a year — which is exactly how two shipped
+# Hebrew RTL fixes kept rendering unfixed. Content-addressed filenames make the
+# immutable promise true: change the bytes, change the URL.
+def publish_asset(stem, suffix, text):
+    payload = text.encode('utf-8')
+    digest = hashlib.sha256(payload).hexdigest()[:10]
+    # Drops both earlier digests and the legacy unversioned filename, so
+    # dist holds exactly the asset the pages reference.
+    for stale in ASSETS.glob(f'{stem}*{suffix}'):
+        stale.unlink()
+    (ASSETS/f'{stem}.{digest}{suffix}').write_bytes(payload)
+    return f'/assets/{stem}.{digest}{suffix}'
+
+STYLE_URL = publish_asset('styles', '.css', STYLE)
+SCRIPT_URL = publish_asset('site', '.js', SCRIPT)
 
 # Root is crawlable HTML; Netlify redirects it to Hebrew in production.
-(ROOT/'index.html').write_text(f'''<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="ביקורת, בקרה וייעוץ פיננסי לארגונים מורכבים."><meta name="robots" content="index,follow"><title>Scout Finance</title><link rel="canonical" href="{site_origin}/"><link rel="alternate" hreflang="he" href="{site_origin}/he/"><link rel="alternate" hreflang="en" href="{site_origin}/en/"><link rel="alternate" hreflang="x-default" href="{site_origin}/he/"><link rel="icon" href="/assets/favicon.ico"><link rel="stylesheet" href="/assets/styles.css"></head><body dir="rtl"><main id="main-content" class="language-chooser" tabindex="-1"><img src="/assets/logo.png" alt="Scout Finance"><h1>Scout Finance</h1><p>בחרו שפה / Choose a language</p><p><a class="btn btn-primary" href="/he/">עברית</a> <a class="btn btn-secondary" href="/en/">English</a></p></main></body></html>''',encoding='utf-8')
+(ROOT/'index.html').write_text(f'''<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="ביקורת, בקרה וייעוץ פיננסי לארגונים מורכבים."><meta name="robots" content="index,follow"><title>Scout Finance</title><link rel="canonical" href="{site_origin}/"><link rel="alternate" hreflang="he" href="{site_origin}/he/"><link rel="alternate" hreflang="en" href="{site_origin}/en/"><link rel="alternate" hreflang="x-default" href="{site_origin}/he/"><link rel="icon" href="/assets/favicon.ico"><link rel="stylesheet" href="{STYLE_URL}"></head><body dir="rtl"><main id="main-content" class="language-chooser" tabindex="-1"><img src="/assets/logo.png" alt="Scout Finance"><h1>Scout Finance</h1><p>בחרו שפה / Choose a language</p><p><a class="btn btn-primary" href="/he/">עברית</a> <a class="btn btn-secondary" href="/en/">English</a></p></main></body></html>''',encoding='utf-8')
 
 service_desc = {
 'en': {
@@ -302,7 +319,7 @@ def doc(lang, slug, title, desc, body):
     disclosure_text = ('This site uses essential local storage and Cloudflare security technology only. No analytics or advertising tools are loaded.' if lang=='en' else 'אתר זה משתמש באחסון מקומי חיוני ובטכנולוגיית האבטחה של Cloudflare בלבד. לא נטענים כלי אנליטיקה או פרסום.')
     disclosure = f'''<aside class="privacy-disclosure" data-privacy-disclosure aria-label="{c['privacy_settings']}"><p>{disclosure_text}</p><div class="privacy-actions"><a href="{url(lang,'cookies')}">{c['privacy_details']}</a><button type="button" class="btn btn-primary" data-privacy-accept>{c['privacy_accept']}</button></div></aside>'''
     turnstile_script = '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>' if slug == 'contact' and CONTACT_FORM_ENABLED else ''
-    return f'''<!doctype html><html lang="{lang}" dir="{c['dir']}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="{escape(desc)}"><meta name="robots" content="{robots}"><title>{escape(title)} | Scout Finance</title><link rel="canonical" href="{site_origin}{path}"><link rel="alternate" hreflang="en" href="{site_origin}{url('en',same)}"><link rel="alternate" hreflang="he" href="{site_origin}{url('he',same)}"><link rel="alternate" hreflang="x-default" href="{site_origin}{xdefault}"><link rel="icon" href="/assets/favicon.ico"><meta property="og:title" content="{escape(title)} | Scout Finance"><meta property="og:description" content="{escape(desc)}"><meta property="og:url" content="{site_origin}{path}"><meta property="og:image" content="{site_origin}/assets/og/scout-finance-share.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:type" content="website"><meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#071b33"><link rel="stylesheet" href="/assets/styles.css">{schema_tags}</head><body dir="{c['dir']}" class="{'rtl' if lang=='he' else ''}">{header(lang, same)}<main id="main-content" tabindex="-1">{body}</main>{footer(lang)}{disclosure}<script src="/assets/site.js" defer></script>{turnstile_script}</body></html>'''
+    return f'''<!doctype html><html lang="{lang}" dir="{c['dir']}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="{escape(desc)}"><meta name="robots" content="{robots}"><title>{escape(title)} | Scout Finance</title><link rel="canonical" href="{site_origin}{path}"><link rel="alternate" hreflang="en" href="{site_origin}{url('en',same)}"><link rel="alternate" hreflang="he" href="{site_origin}{url('he',same)}"><link rel="alternate" hreflang="x-default" href="{site_origin}{xdefault}"><link rel="icon" href="/assets/favicon.ico"><meta property="og:title" content="{escape(title)} | Scout Finance"><meta property="og:description" content="{escape(desc)}"><meta property="og:url" content="{site_origin}{path}"><meta property="og:image" content="{site_origin}/assets/og/scout-finance-share.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:type" content="website"><meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#071b33"><link rel="stylesheet" href="{STYLE_URL}">{schema_tags}</head><body dir="{c['dir']}" class="{'rtl' if lang=='he' else ''}">{header(lang, same)}<main id="main-content" tabindex="-1">{body}</main>{footer(lang)}{disclosure}<script src="{SCRIPT_URL}" defer></script>{turnstile_script}</body></html>'''
 
 def home_body(lang):
     c=copy[lang]; h=c['home']
@@ -458,7 +475,7 @@ for lang in ('en','he'):
         (ddir/'index.html').write_text(doc(lang,slug,p['title'],d,body),encoding='utf-8')
 
 # Branded not-found page served by static hosts.
-(ROOT/'404.html').write_text(f'''<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>העמוד לא נמצא | Scout Finance</title><link rel="icon" href="/assets/favicon.ico"><link rel="stylesheet" href="/assets/styles.css"></head><body dir="rtl"><main id="main-content" class="language-chooser" tabindex="-1"><img src="/assets/logo.png" alt="Scout Finance"><h1>העמוד לא נמצא</h1><p>הקישור שחיפשתם אינו זמין.</p><div class="actions"><a class="btn btn-primary" href="/he/">חזרה לבית</a><a class="btn btn-secondary" href="/en/">English</a></div></main></body></html>''',encoding='utf-8')
+(ROOT/'404.html').write_text(f'''<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>העמוד לא נמצא | Scout Finance</title><link rel="icon" href="/assets/favicon.ico"><link rel="stylesheet" href="{STYLE_URL}"></head><body dir="rtl"><main id="main-content" class="language-chooser" tabindex="-1"><img src="/assets/logo.png" alt="Scout Finance"><h1>העמוד לא נמצא</h1><p>הקישור שחיפשתם אינו זמין.</p><div class="actions"><a class="btn btn-primary" href="/he/">חזרה לבית</a><a class="btn btn-secondary" href="/en/">English</a></div></main></body></html>''',encoding='utf-8')
 
 # robots + sitemap
 (ROOT/'robots.txt').write_text('User-agent: *\nAllow: /\nSitemap: https://www.scout-finance.co.il/sitemap.xml\n',encoding='utf-8')

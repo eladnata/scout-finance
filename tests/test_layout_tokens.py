@@ -6,7 +6,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE_CSS = ROOT / "source" / "styles.css"
-DIST_CSS = ROOT / "dist" / "assets" / "styles.css"
+
+
+def dist_css() -> Path:
+    """The stylesheet ships under a content-addressed filename so the
+    immutable cache header on /assets/* cannot pin a stale copy."""
+    matches = sorted((ROOT / "dist" / "assets").glob("styles.*.css"))
+    assert len(matches) == 1, matches
+    return matches[0]
 
 REQUIRED_TOKENS = (
     "--w-full", "--w-wide", "--w-text", "--w-rail",
@@ -46,7 +53,7 @@ class LayoutTokens(unittest.TestCase):
         )
 
     def test_tokens_reach_the_build(self) -> None:
-        built = DIST_CSS.read_text(encoding="utf-8")
+        built = dist_css().read_text(encoding="utf-8")
         for token in REQUIRED_TOKENS:
             self.assertIn(f"{token}:", built)
 

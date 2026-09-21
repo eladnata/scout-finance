@@ -1,6 +1,7 @@
 from html.parser import HTMLParser
 import os
 from pathlib import Path
+import hashlib
 import re
 import subprocess
 import sys
@@ -16,6 +17,15 @@ def iter_pages() -> list[Path]:
     return sorted(DIST.glob("**/index.html"))
 
 
+def published_asset(stem: str, suffix: str) -> Path:
+    """Browser assets are published under a content-addressed filename so the
+    immutable cache header on /assets/* cannot pin a stale copy."""
+    matches = sorted((DIST / "assets").glob(f"{stem}.*{suffix}"))
+    if len(matches) != 1:
+        raise AssertionError(f"expected one {stem}*{suffix} in dist/assets, got {matches}")
+    return matches[0]
+
+
 class SiteOutputTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -24,17 +34,17 @@ class SiteOutputTests(unittest.TestCase):
     def test_build_is_self_contained(self) -> None:
         self.assertTrue((DIST / "he" / "index.html").exists())
         self.assertTrue((DIST / "en" / "index.html").exists())
-        self.assertTrue((DIST / "assets" / "styles.css").exists())
-        self.assertTrue((DIST / "assets" / "site.js").exists())
+        self.assertTrue(published_asset("styles", ".css").exists())
+        self.assertTrue(published_asset("site", ".js").exists())
 
     def test_generated_browser_assets_match_their_sources(self) -> None:
         source = ROOT / "source"
         self.assertEqual(
-            (DIST / "assets" / "styles.css").read_bytes(),
+            published_asset("styles", ".css").read_bytes(),
             (source / "styles.css").read_bytes(),
         )
         self.assertEqual(
-            (DIST / "assets" / "site.js").read_bytes(),
+            published_asset("site", ".js").read_bytes(),
             (source / "site.js").read_bytes(),
         )
 
@@ -48,7 +58,7 @@ class SiteOutputTests(unittest.TestCase):
                     / f"ibm-plex-sans-hebrew-{weight}.woff2"
                 ).exists()
             )
-        css = (DIST / "assets" / "styles.css").read_text(encoding="utf-8")
+        css = published_asset("styles", ".css").read_text(encoding="utf-8")
         self.assertNotIn("fonts.googleapis.com", css)
         self.assertIn("font-family:'IBM Plex Sans Hebrew'", css)
 
@@ -331,7 +341,7 @@ class SiteOutputTests(unittest.TestCase):
             self.assertNotIn('data-netlify="true"', html)
 
     def test_accessibility_hooks_exist(self) -> None:
-        css = (DIST / "assets" / "styles.css").read_text(encoding="utf-8")
+        css = published_asset("styles", ".css").read_text(encoding="utf-8")
         self.assertIn(":focus-visible", css)
         for page in iter_pages():
             if page == DIST / "index.html":
@@ -362,6 +372,35 @@ class SiteOutputTests(unittest.TestCase):
         self.assertIn("/he/", redirects)
         self.assertIn("/assets/*", headers)
         self.assertIn("immutable", headers)
+
+    def test_immutable_assets_are_content_addressed(self) -> None:
+        """/assets/* ships Cache-Control: max-age=31536000, immutable. A browser
+        holding an immutable response never revalidates it, not even on reload,
+        so a stylesheet published at a fixed filename pins the old layout on
+        every returning visitor for a year. This is why two Hebrew RTL fixes
+        that were built, committed and deployed still rendered unfixed in a
+        browser that had seen the site before. Every reference under that
+        header must therefore carry the digest of the bytes it points at."""
+        headers = (DIST / "_headers").read_text(encoding="utf-8")
+        self.assertIn("immutable", headers)
+
+        reference = re.compile(r'(?:href|src)="(/assets/(?:styles|site)[^"]*)"')
+        checked = 0
+        for page in [*iter_pages(), DIST / "index.html", DIST / "404.html"]:
+            html = page.read_text(encoding="utf-8")
+            for ref in reference.findall(html):
+                checked += 1
+                target = DIST / ref.lstrip("/")
+                self.assertTrue(target.exists(), f"{page.name} references missing {ref}")
+                digest = hashlib.sha256(target.read_bytes()).hexdigest()[:10]
+                self.assertIn(
+                    digest,
+                    Path(ref).name,
+                    f"{page.name} references {ref}, which does not carry the "
+                    f"digest {digest} of its own bytes; an immutable cache "
+                    f"would never pick up a change to it",
+                )
+        self.assertGreater(checked, 0)
 
     def test_security_headers_carry_the_full_policy(self) -> None:
         headers = (DIST / "_headers").read_text(encoding="utf-8")
